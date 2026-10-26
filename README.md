@@ -1,5 +1,8 @@
 # VN Market Dashboard
 
+Live app: [https://vn-market-dashboard-91zt.onrender.com](https://vn-market-dashboard-91zt.onrender.com/)
+Project board: [https://github.com/users/TuanLe-bk18/projects/1)](https://github.com/users/TuanLe-bk18/projects/1)
+
 A full-stack web app that turns a daily Vietnam-stock-market data pipeline into an
 actionable dashboard: market breadth snapshot (VNINDEX, B20/B50/B200 breadth,
 B200<30 fuse) plus a dynamic watchlist with per-ticker thesis, resistance /
