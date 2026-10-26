@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the SQLite watchlist DB outside the container.
+      # (Kept separate from /app/data so the bundled snapshot and seed
+      # files baked into the image are never shadowed by the volume.)
+      - watchlist-data:/app/dbdata
+    environment:
+      - WATCHLIST_DB=/app/dbdata/watchlist.db
+    restart: unless-stopped
+
+volumes:
+  watchlist-data:

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: vn-market-dashboard
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WATCHLIST_DB
+        value: /app/dbdata/watchlist.db

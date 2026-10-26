@@ -1,0 +1,8 @@
+# Local dev / secrets: never commit the real DB or local notes.
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store

@@ -1,0 +1,167 @@
+openapi: 3.0.3
+info:
+  title: VN Market Dashboard API
+  version: 0.1.0
+  description: >
+    Backend contract for the VN Market Dashboard (AI Dev Tools Zoomcamp 2026,
+    Project 1). Serves a bundled market snapshot (VNINDEX, breadth B20/B50/B200,
+    ticker OHLC series) and a SQLite-backed dynamic watchlist. This file is the
+    source of truth both frontend and backend follow.
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/market/summary:
+    get:
+      summary: Market snapshot summary
+      responses:
+        '200':
+          description: Snapshot as of the bundled data date
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [asof, vnindex, breadth, tickers]
+                properties:
+                  asof:
+                    type: string
+                    format: date
+                    example: '2026-10-22'
+                  vnindex:
+                    type: object
+                    required: [close, change_pct]
+                    properties:
+                      close:
+                        type: number
+                        example: 1760.63
+                      change_pct:
+                        type: number
+                        example: 1.26
+                  breadth:
+                    type: object
+                    required: [B20, B50, B200, universe_n]
+                    properties:
+                      B20: { type: number, example: 64.2 }
+                      B50: { type: number, example: 48.0 }
+                      B200: { type: number, example: 26.0 }
+                      universe_n: { type: integer, example: 327 }
+                  tickers:
+                    type: array
+                    items:
+                      type: string
+                    example: ['VIC', 'DRI', 'PVD']
+  /api/market/tickers/{code}:
+    get:
+      summary: OHLC + SMA series for one ticker
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: VIC
+      responses:
+        '200':
+          description: Ticker series
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, series]
+                properties:
+                  code: { type: string }
+                  series:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bar'
+        '404':
+          description: Ticker not in snapshot
+  /api/watchlist:
+    get:
+      summary: List watchlist entries
+      responses:
+        '200':
+          description: All entries, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchlistEntry'
+    post:
+      summary: Add a watchlist entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchlistIn'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistEntry'
+        '422':
+          description: Validation error (e.g. missing code)
+  /api/watchlist/{entry_id}:
+    delete:
+      summary: Delete a watchlist entry
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Entry not found
+components:
+  schemas:
+    Bar:
+      type: object
+      required: [date, o, h, l, c]
+      properties:
+        date: { type: string, format: date }
+        o: { type: number }
+        h: { type: number }
+        l: { type: number }
+        c: { type: number }
+        v: { type: number, nullable: true }
+        sma20: { type: number, nullable: true }
+        sma50: { type: number, nullable: true }
+    WatchlistIn:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, maxLength: 12, example: VIC }
+        thesis: { type: string }
+        resistance: { type: string }
+        support: { type: string }
+        invalidate: { type: string }
+        status: { type: string, default: watching }
+        notes: { type: string }
+    WatchlistEntry:
+      allOf:
+        - $ref: '#/components/schemas/WatchlistIn'
+        - type: object
+          required: [id, created_at]
+          properties:
+            id: { type: integer }
+            created_at: { type: string, format: date-time }

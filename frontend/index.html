@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VN Market Dashboard</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; color: #1a1a1a; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+  .card h3 { margin: 0 0 4px; font-size: 13px; color: #555; }
+  .card .v { font-size: 24px; font-weight: 700; }
+  .up { color: #0a7d2c; } .down { color: #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f5f5f5; }
+  form.add { display: grid; grid-template-columns: 100px 1fr; gap: 8px; max-width: 640px; margin: 12px 0; }
+  input, textarea { padding: 6px; font-size: 14px; }
+  button { padding: 8px 14px; cursor: pointer; }
+  .fuse-on { background: #fdecea; border-color: #c0392b; }
+  .fuse-off { background: #eaf7ee; border-color: #0a7d2c; }
+  small.muted { color: #777; }
+</style>
+</head>
+<body>
+<h1>VN Market Dashboard</h1>
+<p><small class="muted" id="asof"></small></p>
+
+<h2>Market snapshot</h2>
+<div class="cards" id="kpis"></div>
+<div id="fuse"></div>
+
+<h2>Ticker detail</h2>
+<select id="ticker"></select>
+<table id="tickerTable"><thead><tr>
+<th>Date</th><th>O</th><th>H</th><th>L</th><th>C</th><th>Vol</th><th>SMA20</th><th>SMA50</th>
+</tr></thead><tbody></tbody></table>
+
+<h2>Watchlist</h2>
+<table id="wlTable"><thead><tr>
+<th>Code</th><th>Thesis</th><th>Resistance</th><th>Support</th><th>Invalidate</th><th>Status</th><th></th>
+</tr></thead><tbody></tbody></table>
+
+<h3>Add entry</h3>
+<form class="add" id="addForm">
+  <label>Code</label><input name="code" required maxlength="12" placeholder="VIC">
+  <label>Thesis</label><textarea name="thesis" rows="2"></textarea>
+  <label>Resistance</label><input name="resistance">
+  <label>Support</label><input name="support">
+  <label>Invalidate</label><input name="invalidate">
+  <label>Status</label><input name="status" value="watching">
+  <span></span><button type="submit">Add</button>
+</form>
+
+<script>
+const $ = s => document.querySelector(s);
+
+async function loadSummary() {
+  const r = await fetch('/api/market/summary');
+  const d = await r.json();
+  $('#asof').textContent = 'Snapshot as of ' + d.asof + ' (bundled data; refresh with build_snapshot.py)';
+  const b = d.breadth, v = d.vnindex;
+  const cls = v.change_pct >= 0 ? 'up' : 'down';
+  $('#kpis').innerHTML = `
+    <div class="card"><h3>VNINDEX</h3><div class="v ${cls}">${v.close}</div><div class="${cls}">${v.change_pct >= 0 ? '+' : ''}${v.change_pct}%</div></div>
+    <div class="card"><h3>Breadth B20</h3><div class="v">${b.B20}%</div></div>
+    <div class="card"><h3>Breadth B50</h3><div class="v">${b.B50}%</div></div>
+    <div class="card"><h3>Breadth B200</h3><div class="v">${b.B200}%</div><small class="muted">n=${b.universe_n}</small></div>`;
+  const fuseOn = b.B200 < 30;
+  $('#fuse').innerHTML = `<div class="card ${fuseOn ? 'fuse-on' : 'fuse-off'}">
+    <h3>B200 &lt; 30 fuse</h3><div class="v">${fuseOn ? 'ON — no bull-style entries' : 'OFF'}</div></div>`;
+  const sel = $('#ticker');
+  sel.innerHTML = d.tickers.map(t => `<option>${t}</option>`).join('');
+  sel.onchange = () => loadTicker(sel.value);
+  loadTicker(sel.value);
+}
+
+async function loadTicker(code) {
+  const r = await fetch('/api/market/tickers/' + code);
+  const d = await r.json();
+  const rows = d.series.slice(-10).reverse().map(s =>
+    `<tr><td>${s.date}</td><td>${s.o}</td><td>${s.h}</td><td>${s.l}</td><td>${s.c}</td><td>${s.v ?? '-'}</td><td>${s.sma20 ?? '-'}</td><td>${s.sma50 ?? '-'}</td></tr>`).join('');
+  $('#tickerTable tbody').innerHTML = rows;
+}
+
+async function loadWatchlist() {
+  const r = await fetch('/api/watchlist');
+  const list = await r.json();
+  $('#wlTable tbody').innerHTML = list.map(e => `<tr>
+    <td><b>${e.code}</b></td><td>${e.thesis}</td><td>${e.resistance}</td>
+    <td>${e.support}</td><td>${e.invalidate}</td><td>${e.status}</td>
+    <td><button data-del="${e.id}">✕</button></td></tr>`).join('');
+  document.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
+    await fetch('/api/watchlist/' + btn.dataset.del, {method: 'DELETE'});
+    loadWatchlist();
+  });
+}
+
+$('#addForm').onsubmit = async ev => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const body = Object.fromEntries(fd.entries());
+  const r = await fetch('/api/watchlist', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) { ev.target.reset(); loadWatchlist(); }
+  else alert('Failed to add entry');
+};
+
+loadSummary();
+loadWatchlist();
+</script>
+</body>
+</html>
